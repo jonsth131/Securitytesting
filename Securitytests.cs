@@ -21,11 +21,19 @@ namespace Securitytesting
         private PhantomJSDriver _driver;
         private IZapClient _client;
 
+        [OneTimeSetUp]
+        public void OneTimeSetUp()
+        {
+            _client = new ZapClient(Proxy, ProxyPort);
+            _client.Core.DeleteAllAlerts(ApiKey);
+        }
+
         [OneTimeTearDown]
         public void OneTimeTearDown()
         {
             var reportResponse = _client.Core.GetHtmlReport(ApiKey);
             FileWriter(reportResponse.ReportData);
+            _client.Core.DeleteAllAlerts(ApiKey);
         }
 
         [SetUp]
@@ -41,13 +49,14 @@ namespace Securitytesting
             phantomJsOptions.AddAdditionalCapability(CapabilityType.Proxy, proxy);
             _driver = new PhantomJSDriver(phantomJsOptions);
             _driver.Manage().Timeouts().ImplicitlyWait(new TimeSpan(0, 0, 30));
-            _client = new ZapClient(Proxy, ProxyPort);
             _client.HttpSessions.CreateEmptySession(ApiKey, Target);
         }
 
         [TearDown]
         public void TearDown()
         {
+            var activeSession = _client.HttpSessions.GetActiveSession(Target);
+            _client.HttpSessions.RemoveSession(ApiKey, Target, activeSession.Value);
             _driver.Dispose();
         }
 
