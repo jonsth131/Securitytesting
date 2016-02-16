@@ -75,14 +75,13 @@ namespace Securitytesting
             _driver.FindElementByName("login").SendKeys("admin");
             _driver.FindElementByName("pass").SendKeys("secret");
             _driver.FindElementByXPath("html/body/table/tbody/tr[2]/td[2]/center/form/table/tbody/tr[3]/td/input[2]").Click();
-            var parameters = new Dictionary<string, string> { { "apikey", ApiKey }, { "url", Target }, {"recurse", "5"} };
-            var apiResponse = _client.CallApi("ascan", "action", "scan", parameters);
+            var parameters = new Dictionary<string, string> { {"recurse", "5"} };
+            var apiResponse = _client.Ascan.Scan(ApiKey, Target, parameters);
             var value = apiResponse.Value;
             var complete = 0;
             while (complete < 100)
             {
-                var params2 = new Dictionary<string, string> { { "scanId", value } };
-                var callApi = _client.CallApi("ascan", "view", "status", params2);
+                var callApi = _client.Ascan.GetStatus(value);
                 complete = int.Parse(callApi.Value);
                 Thread.Sleep(1000);
             }
