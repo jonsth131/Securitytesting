@@ -4,7 +4,7 @@ using System.Threading;
 using NUnit.Framework;
 using NZap;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Firefox;
+using OpenQA.Selenium.PhantomJS;
 using OpenQA.Selenium.Remote;
 
 namespace Securitytesting
@@ -16,7 +16,7 @@ namespace Securitytesting
         private const string Target = "http://192.168.56.101:8080/insecure/";
         private const string ApiKey = "b56i96opec68mts9ob05pdpigg";
 
-        private FirefoxDriver _driver;
+        private PhantomJSDriver _driver;
         private IZapClient _client;
 
         [SetUp]
@@ -28,9 +28,9 @@ namespace Securitytesting
                 FtpProxy = "localhost:8080",
                 SslProxy = "localhost:8080"
             };
-            var desiredCapabilities = new DesiredCapabilities();
-            desiredCapabilities.SetCapability(CapabilityType.Proxy, proxy);
-            _driver = new FirefoxDriver(desiredCapabilities);
+            var phantomJsOptions = new PhantomJSOptions();
+            phantomJsOptions.AddAdditionalCapability(CapabilityType.Proxy, proxy);
+            _driver = new PhantomJSDriver(phantomJsOptions);
             _driver.Manage().Timeouts().ImplicitlyWait(new TimeSpan(0, 0, 30));
             _client = new ZapClient(Proxy, ProxyPort);
             _client.HttpSessions.CreateEmptySession(ApiKey, Target);
