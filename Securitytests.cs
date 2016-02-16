@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using NUnit.Framework;
 using NZap;
@@ -9,6 +10,7 @@ using OpenQA.Selenium.Remote;
 
 namespace Securitytesting
 {
+    [TestFixture]
     public class Securitytests
     {
         private const string Proxy = "localhost";
@@ -18,6 +20,13 @@ namespace Securitytesting
 
         private PhantomJSDriver _driver;
         private IZapClient _client;
+
+        [OneTimeTearDown]
+        public void OneTimeTearDown()
+        {
+            var reportResponse = _client.Core.GetHtmlReport(ApiKey);
+            FileWriter(reportResponse.ReportData);
+        }
 
         [SetUp]
         public void SetUp()
@@ -40,7 +49,6 @@ namespace Securitytesting
         public void TearDown()
         {
             _driver.Dispose();
-            //_client.Dispose();
         }
 
         [Test]
@@ -107,6 +115,14 @@ namespace Securitytesting
                     + Environment.NewLine
                 );
             }
+        }
+
+        private static void FileWriter(string data)
+        {
+            const string path = @"c:\temp\";
+            var fileName = "Report-" + DateTime.Now + ".html";
+            fileName = fileName.Replace(':', '_');
+            File.WriteAllText(path + fileName, data);
         }
     }
 }
