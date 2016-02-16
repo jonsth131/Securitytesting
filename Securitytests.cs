@@ -13,7 +13,7 @@ namespace Securitytesting
     {
         private const string Proxy = "localhost";
         private const int ProxyPort = 8080;
-        private const string Target = "http://localhost/";
+        private const string Target = "http://192.168.56.101:8080/insecure/";
         private const string ApiKey = "b56i96opec68mts9ob05pdpigg";
 
         private FirefoxDriver _driver;
@@ -33,8 +33,7 @@ namespace Securitytesting
             _driver = new FirefoxDriver(desiredCapabilities);
             _driver.Manage().Timeouts().ImplicitlyWait(new TimeSpan(0, 0, 30));
             _client = new ZapClient(Proxy, ProxyPort);
-            var parameters = new Dictionary<string, string> { { "apikey", ApiKey }, { "site", Target } };
-            _client.CallApi("httpSessions", "action", "createEmptySession", parameters);
+            _client.HttpSessions.CreateEmptySession(ApiKey, Target);
         }
 
         [TearDown]
@@ -56,14 +55,13 @@ namespace Securitytesting
         public void VulnerabilityScanBeforeLogin()
         {
             _driver.Navigate().GoToUrl(Target);
-            var parameters = new Dictionary<string, string> { { "apikey", ApiKey }, { "url", Target }, { "maxChildren", "5" }, { "recurse", "5" } };
-            var apiResponse = _client.CallApi("spider", "action", "scan", parameters);
+            var parameters = new Dictionary<string, string> { { "maxChildren", "5" }, { "recurse", "5" } };
+            var apiResponse = _client.Spider.Scan(ApiKey, Target, parameters);
             var value = apiResponse.Value;
             var complete = 0;
             while (complete < 100)
             {
-                var params2 = new Dictionary<string, string> { { "scanId", value } };
-                var callApi = _client.CallApi("spider", "view", "status", params2);
+                var callApi = _client.Spider.GetStatus(value);
                 complete = int.Parse(callApi.Value);
                 Thread.Sleep(1000);
             }
@@ -73,10 +71,10 @@ namespace Securitytesting
         [Test]
         public void VulnerabilityScanAfterLogin()
         {
-            _driver.Navigate().GoToUrl(Target);
-            _driver.FindElementByName("username").SendKeys("admin");
-            _driver.FindElementByName("password").SendKeys("password");
-            _driver.FindElementByName("Login").Click();
+            _driver.Navigate().GoToUrl(Target + "public/Login.jsp");
+            _driver.FindElementByName("login").SendKeys("admin");
+            _driver.FindElementByName("pass").SendKeys("secret");
+            _driver.FindElementByXPath("html/body/table/tbody/tr[2]/td[2]/center/form/table/tbody/tr[3]/td/input[2]").Click();
             var parameters = new Dictionary<string, string> { { "apikey", ApiKey }, { "url", Target }, {"recurse", "5"} };
             var apiResponse = _client.CallApi("ascan", "action", "scan", parameters);
             var value = apiResponse.Value;
@@ -85,7 +83,7 @@ namespace Securitytesting
             {
                 var params2 = new Dictionary<string, string> { { "scanId", value } };
                 var callApi = _client.CallApi("ascan", "view", "status", params2);
-                complete = Int32.Parse(callApi.Value);
+                complete = int.Parse(callApi.Value);
                 Thread.Sleep(1000);
             }
             PrintAlertsToConsole();
@@ -93,7 +91,7 @@ namespace Securitytesting
 
         private void PrintAlertsToConsole()
         {
-            var alerts = _client.GetAlerts(Target);
+            var alerts = _client.Core.GetAlerts(Target);
             foreach (var alert in alerts)
             {
                 Console.WriteLine(alert.Alert
