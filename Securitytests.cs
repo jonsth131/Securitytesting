@@ -1,137 +1,85 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
+﻿using System.Threading;
 using NUnit.Framework;
 using NZap;
 using OpenQA.Selenium;
-using OpenQA.Selenium.PhantomJS;
-using OpenQA.Selenium.Remote;
+using Securitytesting.Factories;
+using Securitytesting.Helpers;
+using Securitytesting.Pages;
+using Securitytesting.Settings;
 
 namespace Securitytesting
 {
     [TestFixture]
     public class Securitytests
     {
-        private const string Proxy = "localhost";
-        private const int ProxyPort = 8080;
-        private const string Target = "http://192.168.56.101:8080/insecure/";
-        private const string ApiKey = "b56i96opec68mts9ob05pdpigg";
-
-        private PhantomJSDriver _driver;
+        private IWebDriver _driver;
         private IZapClient _client;
 
         [OneTimeSetUp]
         public void OneTimeSetUp()
         {
-            _client = new ZapClient(Proxy, ProxyPort);
-            _client.Core.DeleteAllAlerts(ApiKey);
+            _client = new ZapClient(ProxySettings.Proxy, ProxySettings.ProxyPort);
+            _client.Core.DeleteAllAlerts(ZapSettings.ApiKey);
         }
 
         [OneTimeTearDown]
         public void OneTimeTearDown()
         {
-            var reportResponse = _client.Core.GetHtmlReport(ApiKey);
-            FileWriter(reportResponse.ReportData);
-            _client.Core.DeleteAllAlerts(ApiKey);
+            Thread.Sleep(5000);
+            var reportResponse = _client.Core.GetHtmlReport(ZapSettings.ApiKey);
+            FileWriterHelper.WriteFile(@"c:\temp\zap\", reportResponse.ReportData);
+            _client.Core.DeleteAllAlerts(ZapSettings.ApiKey);
         }
 
         [SetUp]
         public void SetUp()
         {
-            var proxy = new Proxy
-            {
-                HttpProxy = "localhost:8080",
-                FtpProxy = "localhost:8080",
-                SslProxy = "localhost:8080"
-            };
-            var phantomJsOptions = new PhantomJSOptions();
-            phantomJsOptions.AddAdditionalCapability(CapabilityType.Proxy, proxy);
-            _driver = new PhantomJSDriver(phantomJsOptions);
-            _driver.Manage().Timeouts().ImplicitlyWait(new TimeSpan(0, 0, 30));
-            _client.HttpSessions.CreateEmptySession(ApiKey, Target);
+            _driver = DriverFactory.CreateWebDriver();
+            _client.HttpSessions.CreateEmptySession(ZapSettings.ApiKey, ZapSettings.Target);
         }
 
         [TearDown]
         public void TearDown()
         {
-            var activeSession = _client.HttpSessions.GetActiveSession(Target);
-            _client.HttpSessions.RemoveSession(ApiKey, Target, activeSession.Value);
+            var activeSession = _client.HttpSessions.GetActiveSession(ZapSettings.Target);
+            _client.HttpSessions.RemoveSession(ZapSettings.ApiKey, ZapSettings.Target, activeSession.Value);
             _driver.Dispose();
         }
 
         [Test]
         public void TestMethod1()
         {
-            _client.Pscan.EnableAllScanners(ApiKey);
-            _driver.Navigate().GoToUrl(Target);
-            PrintAlertsToConsole();
+            _client.Pscan.EnableAllScanners(ZapSettings.ApiKey);
+            _driver.Navigate().GoToUrl(ZapSettings.Target);
+            AlertHelper.PrintAlertsToConsole(_client.Core.GetAlerts(ZapSettings.Target));
         }
 
         [Test]
         public void VulnerabilityScanBeforeLogin()
         {
-            _driver.Navigate().GoToUrl(Target);
-            var parameters = new Dictionary<string, string> { { "maxChildren", "5" }, { "recurse", "5" } };
-            var apiResponse = _client.Spider.Scan(ApiKey, Target, parameters);
-            var value = apiResponse.Value;
-            var complete = 0;
-            while (complete < 100)
-            {
-                var callApi = _client.Spider.GetStatus(value);
-                complete = int.Parse(callApi.Value);
-                Thread.Sleep(1000);
-            }
-            PrintAlertsToConsole();
+            _driver.Navigate().GoToUrl(ZapSettings.Target);
+            var apiResponse = ScanHelper.StartSpider(_client);
+            ScanHelper.WaitForSpiderToComplete(_client, apiResponse);
+            apiResponse = ScanHelper.StartAscan(_client);
+            ScanHelper.WaitForAscanToComplete(_client, apiResponse);
+            AlertHelper.PrintAlertsToConsole(_client.Core.GetAlerts(ZapSettings.Target));
         }
 
         [Test]
         public void VulnerabilityScanAfterLogin()
         {
-            _driver.Navigate().GoToUrl(Target + "public/Login.jsp");
-            _driver.FindElementByName("login").SendKeys("admin");
-            _driver.FindElementByName("pass").SendKeys("secret");
-            _driver.FindElementByXPath("html/body/table/tbody/tr[2]/td[2]/center/form/table/tbody/tr[3]/td/input[2]").Click();
-            var parameters = new Dictionary<string, string> { {"recurse", "5"} };
-            var apiResponse = _client.Ascan.Scan(ApiKey, Target, parameters);
-            var value = apiResponse.Value;
-            var complete = 0;
-            while (complete < 100)
-            {
-                var callApi = _client.Ascan.GetStatus(value);
-                complete = int.Parse(callApi.Value);
-                Thread.Sleep(1000);
-            }
-            PrintAlertsToConsole();
+            _driver.Navigate().GoToUrl(ZapSettings.Target + "insecure/public/Login.jsp");
+            var loginPage = PageObjectFactory.GetInitializedPageObject<LoginPage>(_driver);
+            loginPage.SendKeysToLoginField("admin");
+            loginPage.SendKeysToPasswordField("secret");
+            loginPage.PressLoginButton();
+            var apiResponse = ScanHelper.StartSpider(_client);
+            ScanHelper.WaitForSpiderToComplete(_client, apiResponse);
+            apiResponse = ScanHelper.StartAscan(_client);
+            ScanHelper.WaitForAscanToComplete(_client, apiResponse);
+            AlertHelper.PrintAlertsToConsole(_client.Core.GetAlerts(ZapSettings.Target));
         }
 
-        private void PrintAlertsToConsole()
-        {
-            var alerts = _client.Core.GetAlerts(Target);
-            foreach (var alert in alerts)
-            {
-                Console.WriteLine(alert.Alert
-                    + Environment.NewLine
-                    + alert.Cweid
-                    + Environment.NewLine
-                    + alert.Url
-                    + Environment.NewLine
-                    + alert.Wascid
-                    + Environment.NewLine
-                    + alert.Evidence
-                    + Environment.NewLine
-                    + alert.Param
-                    + Environment.NewLine
-                );
-            }
-        }
 
-        private static void FileWriter(string data)
-        {
-            const string path = @"c:\temp\";
-            var fileName = "Report-" + DateTime.Now + ".html";
-            fileName = fileName.Replace(':', '_');
-            File.WriteAllText(path + fileName, data);
-        }
     }
 }
