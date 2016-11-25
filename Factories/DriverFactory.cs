@@ -2,7 +2,8 @@
 using OpenQA.Selenium;
 using OpenQA.Selenium.PhantomJS;
 using OpenQA.Selenium.Remote;
-using Securitytesting.Settings;
+using Securitytesting.Enums;
+using Securitytesting.Helpers;
 
 namespace Securitytesting.Factories
 {
@@ -10,7 +11,9 @@ namespace Securitytesting.Factories
     {
         public static IWebDriver CreateWebDriver()
         {
-            var proxyString = $"{ProxySettings.Proxy}:{ProxySettings.ProxyPort}";
+            var proxyHost = AppSettingsHelper.ReadString(AppSettings.Proxy);
+            var proxyPort = AppSettingsHelper.ReadInt(AppSettings.ProxyPort);
+            var proxyString = $"{proxyHost}:{proxyPort}";
 
             var proxy = new Proxy
             {
